@@ -31,23 +31,26 @@ jobs:
           docker tag tienda-backend:latest ${{ secrets.ECR_REPO_URL_BACKEND }}:latest
           docker push ${{ secrets.ECR_REPO_URL_BACKEND }}:latest
 
-      - name: Desplegar Backend via SSH Jump Host
+      - name: Desplegar Backend via Frontend
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.EC2_BACKEND_HOST }}
+          host: ${{ secrets.EC2_FRONTEND_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          proxy_host: ${{ secrets.EC2_FRONTEND_HOST }}
-          proxy_username: ec2-user
-          proxy_key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          envs: AWS_REGION,ECR_REGISTRY,ECR_REPO_URL_BACKEND,EC2_BACKEND_HOST
           script: |
-            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | \
-              docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
-            docker pull ${{ secrets.ECR_REPO_URL_BACKEND }}:latest
-            docker stop tienda-backend || true
-            docker rm tienda-backend || true
-            docker run -d \
-              --name tienda-backend \
-              --restart always \
-              -p 3001:3001 \
-              ${{ secrets.ECR_REPO_URL_BACKEND }}:latest
+            # Pull en el frontend (tiene internet)
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login --username AWS --password-stdin $ECR_REGISTRY
+
+            docker pull $ECR_REPO_URL_BACKEND:latest
+
+            # Enviar imagen al backend y desplegar
+            docker save $ECR_REPO_URL_BACKEND:latest | \
+              ssh -i ~/.ssh/Devops.pem \
+                  -o StrictHostKeyChecking=no \
+                  ec2-user@$EC2_BACKEND_HOST \
+                  "docker load && \
+                   docker stop tienda-backend || true && \
+                   docker rm tienda-backend || true && \
+                   docker run -d --name tienda-backend --restart always -p 3001:3001 $ECR_REPO_URL_BACKEND:latest"
