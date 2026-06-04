@@ -33,24 +33,26 @@ jobs:
 
       - name: Desplegar Backend via Frontend
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          ECR_REPO_URL_BACKEND: ${{ secrets.ECR_REPO_URL_BACKEND }}
+          EC2_BACKEND_HOST: ${{ secrets.EC2_BACKEND_HOST }}
         with:
           host: ${{ secrets.EC2_FRONTEND_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           envs: AWS_REGION,ECR_REGISTRY,ECR_REPO_URL_BACKEND,EC2_BACKEND_HOST
           script: |
-            # Pull en el frontend (tiene internet)
             aws ecr get-login-password --region $AWS_REGION | \
               docker login --username AWS --password-stdin $ECR_REGISTRY
-
             docker pull $ECR_REPO_URL_BACKEND:latest
-
-            # Enviar imagen al backend y desplegar
             docker save $ECR_REPO_URL_BACKEND:latest | \
               ssh -i ~/.ssh/Devops.pem \
                   -o StrictHostKeyChecking=no \
                   ec2-user@$EC2_BACKEND_HOST \
-                  "docker load && \
-                   docker stop tienda-backend || true && \
-                   docker rm tienda-backend || true && \
-                   docker run -d --name tienda-backend --restart always -p 3001:3001 $ECR_REPO_URL_BACKEND:latest"
+                  "docker load; \
+                   docker stop tienda-backend || true; \
+                   docker rm tienda-backend || true; \
+                   docker run -d --name tienda-backend --restart always \
+                   -p 3001:3001 $ECR_REPO_URL_BACKEND:latest"
