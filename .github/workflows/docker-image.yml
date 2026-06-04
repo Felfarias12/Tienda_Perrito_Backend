@@ -38,11 +38,12 @@ jobs:
           ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
           ECR_REPO_URL_BACKEND: ${{ secrets.ECR_REPO_URL_BACKEND }}
           EC2_BACKEND_HOST: ${{ secrets.EC2_BACKEND_HOST }}
+          EC2_DB_HOST: ${{ secrets.EC2_DB_HOST }}
         with:
           host: ${{ secrets.EC2_FRONTEND_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          envs: AWS_REGION,ECR_REGISTRY,ECR_REPO_URL_BACKEND,EC2_BACKEND_HOST
+          envs: AWS_REGION,ECR_REGISTRY,ECR_REPO_URL_BACKEND,EC2_BACKEND_HOST,EC2_DB_HOST
           script: |
             aws ecr get-login-password --region $AWS_REGION | \
               docker login --username AWS --password-stdin $ECR_REGISTRY
@@ -54,5 +55,13 @@ jobs:
                   "docker load; \
                    docker stop tienda-backend || true; \
                    docker rm tienda-backend || true; \
-                   docker run -d --name tienda-backend --restart always \
-                   -p 3001:3001 $ECR_REPO_URL_BACKEND:latest"
+                   docker run -d \
+                     --name tienda-backend \
+                     --restart always \
+                     -p 3001:3001 \
+                     -e DB_HOST=$EC2_DB_HOST \
+                     -e DB_USER=root \
+                     -e DB_PASSWORD=admin123 \
+                     -e DB_NAME=tienda_perritos \
+                     -e DB_PORT=3306 \
+                     $ECR_REPO_URL_BACKEND:latest"
